@@ -1,0 +1,98 @@
+esphome:
+  name: challenger-battery-monitor-updated
+  friendly_name: challenger-battery-monitor-updated
+  includes:
+    - custom/custom_aes.h
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_BT_BLE_50_FEATURES_SUPPORTED: y
+      CONFIG_BT_BLE_42_FEATURES_SUPPORTED: y
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "<Secret API Key Here>"
+
+ota:
+- platform: esphome
+  password: "<Secret OTA Password Here>"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Car-Battery-Monitor"
+    password: "<Secret AP Password Here>"
+
+captive_portal:
+
+# Enable Bluetooth scanning for this ESP32
+esp32_ble_tracker:
+
+sensor:
+  - platform: ble_client
+    ble_client_id: challenger_voltage
+    id: challenger_voltage_sensor
+    name: "Challenger Voltage"
+    service_uuid: 'fff0'
+    type: characteristic
+    characteristic_uuid: 'fff4'
+    unit_of_measurement: 'V'
+    accuracy_decimals: 2
+    state_class: measurement
+    device_class: voltage
+    force_update: true
+    notify: true
+    lambda: |-
+      mbedtls_aes_context aes;
+      mbedtls_aes_init(&aes);
+      unsigned char output[16];
+      unsigned char key[16] = { 108, 101, 97, 103, 101, 110, 100, 255, 254, 49, 56, 56, 50, 52, 54, 54, };
+      unsigned char iv[16] = {};
+      mbedtls_aes_setkey_dec(&aes, key, 128);
+      mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, 16, iv, (uint8_t*)&x[0], output);
+      mbedtls_aes_free(&aes);
+      return ((output[2] | (output[1] << 8)) >> 4) / 100.0f;  
+
+  - platform: template
+    name: "Challenger Battery Percentage"
+    id: challenger_battery_percentage
+    unit_of_measurement: '%'
+    accuracy_decimals: 1
+    device_class: battery
+    state_class: measurement
+    lambda: |-
+      float voltage = id(challenger_voltage_sensor).state;
+      if (isnan(voltage)) return {};
+
+      // 12V AGM battery voltage to percentage calculation with linear interpolation
+      float voltage_points[] = {11.31, 11.58, 11.75, 11.90, 12.06, 12.20, 12.32, 12.42, 12.50, 12.70};
+      float percentage_points[] = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+      int num_points = 10;
+
+      if (voltage <= voltage_points[0]) return percentage_points[0];
+      if (voltage >= voltage_points[num_points-1]) return percentage_points[num_points-1];
+
+      for (int i = 0; i < num_points - 1; i++) {
+        if (voltage >= voltage_points[i] && voltage <= voltage_points[i+1]) {
+          float v1 = voltage_points[i];
+          float v2 = voltage_points[i+1];
+          float p1 = percentage_points[i];
+          float p2 = percentage_points[i+1];
+          return p1 + (voltage - v1) * (p2 - p1) / (v2 - v1);
+        }
+      }
+      return 0;
+
+ble_client:
+  - mac_address: 90:E2:02:3B:EA:01
+    id: challenger_voltage
