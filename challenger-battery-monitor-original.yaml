@@ -1,0 +1,64 @@
+esphome:
+  name: challenger-battery-monitor-original
+  friendly_name: challenger-battery-monitor-original
+  includes:
+    - mbedtls.h
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "<Secret API Key Here>"
+
+ota:
+- platform: esphome
+  password: "<Secret OTA Password Here>"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Car-Battery-Monitor"
+    password: "<Secret AP Password Here>"
+
+captive_portal:
+
+# Enable Bluetooth scanning for this ESP32
+esp32_ble_tracker:
+
+sensor:
+  - platform: ble_client
+    ble_client_id: challenger_voltage
+    name: "challenger Voltage"
+    service_uuid: 'fff0'
+    type: characteristic
+    characteristic_uuid: 'fff4'
+    unit_of_measurement: 'V'
+    accuracy_decimals: 2
+    state_class: measurement
+    device_class: voltage
+    force_update: true
+    notify: true
+    lambda: |-
+      mbedtls_aes_context aes;
+      mbedtls_aes_init(&aes);
+      unsigned char output[16];
+      unsigned char key[16] = { 108, 101, 97, 103, 101, 110, 100, 255, 254, 49, 56, 56, 50, 52, 54, 54, };
+      unsigned char iv[16] = {};
+      mbedtls_aes_setkey_dec(&aes, key, 128);
+      mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, 16, iv, (uint8_t*)&x[0], output);
+      mbedtls_aes_free(&aes);
+      return ((output[2] | (output[1] << 8)) >> 4) / 100.0f;
+      
+ble_client:
+  - mac_address: 90:E2:02:3B:EA:01
+    id: challenger_voltage
