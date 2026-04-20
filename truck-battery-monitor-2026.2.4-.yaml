@@ -16,18 +16,18 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "h490KTuym0+5KieK8e38T9UjoDIvpsFQ5eyxO5eTIPs="
+    key: "<Secret API Key Here>"
 
 ota:
 - platform: esphome
-  password: "ee6b4290c3f87c5b6a06fa0f4ec27887"
+  password: "<Secret OTA Key Here>"
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   ap:
     ssid: "Car-Battery-Monitor"
-    password: "rz0hkBzC6VaW"
+    password: "<Secret AP Password Here>"
 
 captive_portal:
 
